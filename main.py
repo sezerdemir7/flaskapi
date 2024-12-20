@@ -1,13 +1,20 @@
 from flask import Flask, render_template, request, redirect, url_for, jsonify
 from flask_sqlalchemy import SQLAlchemy
+from flask_cors import CORS
+
 
 app = Flask(__name__)
 
+CORS(app, resources={r"/*": {"origins": "*"}})  # Tüm domainler için izin ver
+
+
 # PostgreSQL bağlantı ayarları
-app.config['SQLALCHEMY_DATABASE_URI'] = 'postgresql://postgres:123456@localhost:5432/flaskApp'
+app.config['SQLALCHEMY_DATABASE_URI'] = 'postgresql://postgres:12345@localhost:5432/flaskApp'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 db = SQLAlchemy(app)
+
+
 
 # Veritabanı Modelleri
 
@@ -25,6 +32,8 @@ class Section(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(100), nullable=False)  # Alt bölüm ismi
     link = db.Column(db.String(200), nullable=False)  # Alt bölüm adresi
+    latitude = db.Column(db.Float, nullable=False)  # Enlem
+    longitude = db.Column(db.Float, nullable=False)  # Boylam
     building_id = db.Column(db.Integer, db.ForeignKey('buildings.id'), nullable=False)  # Ana bina ile ilişki
 # Ana Sayfa
 @app.route('/')
@@ -38,6 +47,8 @@ def add_section(building_id):
     data = request.get_json()
     section_name = data.get('name')
     section_link = data.get('link')
+    section_lat = data.get('latitude')
+    section_lon = data.get('longitude')
 
     # Bina var mı kontrol et
     building = Building.query.get(building_id)
@@ -48,6 +59,8 @@ def add_section(building_id):
     new_section = Section(
         name=section_name,
         link=section_link,
+        latitude=section_lat,
+        longitude=section_lon,
         building_id=building_id
     )
 
@@ -147,6 +160,47 @@ def delete_section_from_building(building_id, section_id):
     db.session.delete(section)
     db.session.commit()
     return jsonify({'message': 'Bölüm başarıyla silindi!'}), 200
+
+
+# Bina Güncelleme API
+@app.route('/building/<int:id>', methods=['PUT'])
+def update_building(id):
+    # Bina verilerini al
+    building = Building.query.get_or_404(id)
+
+    # JSON verisini al
+    data = request.get_json()
+
+    # Verileri güncelle
+    building.name = data.get('name', building.name)
+    building.latitude = data.get('latitude', building.latitude)
+    building.longitude = data.get('longitude', building.longitude)
+    building.type = data.get('type', building.type)
+
+    # Veritabanına kaydet
+    db.session.commit()
+
+    return jsonify({'message': 'Bina başarıyla güncellendi!'}), 200
+# Bölüm Güncelleme API
+@app.route('/building/<int:building_id>/section/<int:section_id>', methods=['PUT'])
+def update_section(building_id, section_id):
+    # Bölüm verisini al
+    section = Section.query.filter_by(id=section_id, building_id=building_id).first_or_404()
+
+    # JSON verisini al
+    data = request.get_json()
+
+    # Verileri güncelle
+    section.name = data.get('name', section.name)
+    section.link = data.get('link', section.link)
+    section.latitude = data.get('latitude', section.latitude)
+    section.longitude = data.get('longitude', section.longitude)
+
+    # Veritabanına kaydet
+    db.session.commit()
+
+    return jsonify({'message': 'Bölüm başarıyla güncellendi!'}), 200
+
 
 # Veritabanını başlat
 with app.app_context():
